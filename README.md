@@ -120,14 +120,14 @@ The heuristic used in the A* search is a combination of the manhattan distance a
 
 #### bfs
 
-The ```bfs``` command performs a breadth-first search for a solution. It will either find a solution, print the number of moves it explored whilst searching for the solution, OR it will fail to find a solution and print the number of moves it explored whilst searching for the solution. An example of an A* run using a sample board is
+The ```bfs``` command performs a breadth-first search for a solution. It will either find a solution, print the number of moves it explored whilst searching for the solution, OR it will fail to find a solution and print the number of moves it explored whilst searching for the solution. An example of a BFS run using a sample board is
 ```console
 ./cppsrc/maze.x bfs
 ```
 
 #### dfs
 
-The ```dfs``` command performs a depth-first search for a solution. It will either find a solution, print the number of moves it explored whilst searching for the solution, OR it will fail to find a solution and print the number of moves it explored whilst searching for the solution. An example of an A* run using a sample board is
+The ```dfs``` command performs a depth-first search for a solution. It will either find a solution, print the number of moves it explored whilst searching for the solution, OR it will fail to find a solution and print the number of moves it explored whilst searching for the solution. An example of a DFS run using a sample board is
 ```console
 ./cppsrc/maze.x dfs
 ```
