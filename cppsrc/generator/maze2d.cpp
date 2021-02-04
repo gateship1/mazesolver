@@ -1,5 +1,23 @@
 #include "maze2d.hpp"
 
+/* list_of_neighbors
+  
+  generates a list of all the neighbor vertices for each vertex in the maze
+  
+  return:
+    a list of each vertex in the maze and all its neighboring vertices
+
+*/
+auto Maze2D::list_of_neighbors() const -> std::vector<std::vector<int>> {
+    
+    std::vector<std::vector<int>> neighbors(this->rows * this->cols); // note, the index represents a vertex
+    for (const auto& edge : this->e) {
+        neighbors.at(edge.first).emplace_back(edge.second);
+        neighbors.at(edge.second).emplace_back(edge.first);
+    }
+    return neighbors;
+}
+
 /* load_maze
   
   loads a pregenerated maze from a text file and creates a maze object
@@ -32,6 +50,8 @@ auto Maze2D::load_maze(const std::string& input_file) -> Maze2D {
     
     std::vector<std::pair<int, int>> mpath; // maze paths
     int start{-1}, end{-1}; // start and end vertices for the maze, respectively
+    
+    std::vector<int> spath; // list of vertices forming a solution path
     
     // read the maze file line by line
     std::fstream mazefile;
@@ -71,6 +91,19 @@ auto Maze2D::load_maze(const std::string& input_file) -> Maze2D {
                             } else { // artificial cell designating path or no path between row vetices
                                 if (c == path_symbol) { // this is a path, add it to the maze edges (path)
                                     mpath.emplace_back(std::make_pair(vertex - 1, vertex));
+                                } else if (c == solution_symbol) {
+                                    // if the character is a solution_symbol character, then add the vertex
+                                    // and its partner to the maze solution path
+                                    // note that these are both first checked for uniqueness in the solution path
+                                    // to avoid duplication
+                                    if (std::find(spath.begin(), spath.end(), vertex - 1) == spath.end()) {
+                                        spath.emplace_back(vertex - 1);
+                                    }
+                                    if (std::find(spath.begin(), spath.end(), vertex) == spath.end()) {
+                                        spath.emplace_back(vertex);
+                                    } 
+                                    // also add this vertex and its partner to the maze path
+                                    mpath.emplace_back(std::make_pair(vertex - 1, vertex));
                                 }
                             }
                         }            
@@ -82,6 +115,19 @@ auto Maze2D::load_maze(const std::string& input_file) -> Maze2D {
                         if (col_count != 0 && col_count != 2 * maze_cols) { // skip the first col and last col
                             if ((col_count) % 2 != 0) { // aligned w/ a vertex
                                 if (c == path_symbol) {
+                                    mpath.emplace_back(std::make_pair(rowv, rowv - maze_cols));
+                                } else if (c == solution_symbol) {
+                                    // if the character is a solution_symbol character, then add the vertex
+                                    // and its partner to the maze solution path
+                                    // note that these are both first checked for uniqueness in the solution path
+                                    // to avoid duplication
+                                    if (std::find(spath.begin(), spath.end(), rowv) == spath.end()) {
+                                        spath.emplace_back(rowv);
+                                    }
+                                    if (std::find(spath.begin(), spath.end(), rowv - maze_cols) == spath.end()) {
+                                        spath.emplace_back(rowv - maze_cols);
+                                    }
+                                    // also add this vertex and its partner to the maze path
                                     mpath.emplace_back(std::make_pair(rowv, rowv - maze_cols));
                                 }
                                 rowv++;
@@ -99,7 +145,10 @@ auto Maze2D::load_maze(const std::string& input_file) -> Maze2D {
         return Maze2D();
     }
     
-    return Maze2D(maze_seed, maze_rows, maze_cols, start, end, mpath);
+    // sort the edges in the maze path (for use in solving)
+    std::sort(mpath.begin(), mpath.end(), compare_pairs<int>);
+    
+    return Maze2D(maze_seed, maze_rows, maze_cols, start, end, mpath, spath);
 }
 
 /* maze_to_str
@@ -114,6 +163,49 @@ auto Maze2D::maze_to_str() const -> std::string {
     std::string maze_str{}; // stores the maze as a string for terminal output / saving to a text file
     auto start_str_pos{this->start}; // index of the start position (need to adjust to printed vertice)
     auto end_str_pos{this->end}; // index of the end position (need to adjust to printed vertice)
+    
+    /* path_or_solution
+      
+      lambda used in printing a solution
+      
+      parameters:
+        solution_path, the list of vertices in the solution path for the maze object
+        v, the vertex to check for in the solution path list
+      
+      return:
+        if the vertex, v, is in the solution path the solution_symbol is returned
+          otherwise, the path_symbol is returned (since all vertices are in the path)
+        special case is when the solution path is empty, then the path_symbol is always returned
+    */
+    auto path_or_solution = [](const auto& solution_path, const auto& v) {
+        
+        if (solution_path.empty()) // check if a solution exists
+            return path_symbol;
+        return (std::find(solution_path.begin(), solution_path.end(), v) != solution_path.end()) 
+               ? solution_symbol : path_symbol;
+    };
+    
+    /* path_or_solution_pair
+      
+      lambda used in printing a solution
+      
+      parameters:
+        solution_path, the list of vertices in the solution path for the maze object
+        vpair, a pair of vertices to check for in the solution path list
+      
+      return:
+        if BOTH vertices in the pair of vertices, vpair, are in the solution path the solution_symbol is returned
+          otherwise, the path_symbol is returned
+        special case is when the solution path is empty, then the path_symbol is always returned
+    */
+    auto path_or_solution_pair = [](const auto& solution_path, const auto& vpair) {
+        
+        if (solution_path.empty()) // check if a solution exists
+            return path_symbol;
+        return ((std::find(solution_path.begin(), solution_path.end(), vpair.first) != solution_path.end()) &&
+                (std::find(solution_path.begin(), solution_path.end(), vpair.second) != solution_path.end()))
+               ? solution_symbol : path_symbol;
+    };
     
     // upper border
     for (int w{0}; w < 2 * this->cols + 1; ++w) {
@@ -148,14 +240,15 @@ auto Maze2D::maze_to_str() const -> std::string {
         }
         
         // every vertex is part of a path
-        maze_str += path_symbol;
+        maze_str += path_or_solution(this->solution_path, v);
         
         // if a pair of vertices are in the maze path, they are connected
         // the maze path is an undirected graph, therefore pairs are checked in both directions
-        if (std::find(this->e.begin(), this->e.end(), std::make_pair(v, v + 1)) != this->e.end())
-            maze_str += path_symbol;
-        else if (std::find(this->e.begin(), this->e.end(), std::make_pair(v + 1, v)) != this->e.end())
-            maze_str += path_symbol;
+        if (std::find(this->e.begin(), this->e.end(), std::make_pair(v, v + 1)) != this->e.end()) {
+            maze_str += path_or_solution_pair(this->solution_path, std::make_pair(v, v + 1));
+        } else if (std::find(this->e.begin(), this->e.end(), std::make_pair(v + 1, v)) != this->e.end()) {
+            maze_str += path_or_solution_pair(this->solution_path, std::make_pair(v + 1, v));
+        }
         else {
             // check if need to move to the next row (like a typewriter)
             if ((v + 1) % this->cols == 0) {
@@ -168,9 +261,9 @@ auto Maze2D::maze_to_str() const -> std::string {
                     // like above, if a pair of vertices are in the maze path, they are connected
                     // the maze path is an undirected graph, therefore pairs are checked in both directions
                     if (std::find(this->e.begin(), this->e.end(), std::make_pair(vc, vc - this->cols)) != this->e.end())
-                        maze_str += path_symbol;
+                        maze_str += path_or_solution_pair(this->solution_path, std::make_pair(vc, vc - this->cols));
                     else if (std::find(this->e.begin(), this->e.end(), std::make_pair(vc - this->cols, vc)) != this->e.end())
-                        maze_str += path_symbol;
+                        maze_str += path_or_solution_pair(this->solution_path, std::make_pair(vc - this->cols, vc));
                     else // if not a path, it is a wall
                         maze_str += wall_symbol;
                     
@@ -190,7 +283,7 @@ auto Maze2D::maze_to_str() const -> std::string {
         }
     }
     
-    // specials vertices
+    // special vertices
     maze_str.at(start_str_pos) = start_symbol;
     maze_str.at(end_str_pos) = end_symbol;
     
@@ -218,6 +311,7 @@ auto Maze2D::print_e() const -> void {
         if ((p+1) % 10 == 0 && p != static_cast<int>(this->e.size()) -1) std::cout << "\n";
     }
     std::cout << "}\n";
+    return;
 }
 
 /* save_maze
@@ -228,11 +322,15 @@ auto Maze2D::print_e() const -> void {
   parameters:
     save_path, the location for where the maze is to be saved
 */
-auto Maze2D::save_maze(const std::string& save_path) const -> void {
+auto Maze2D::save_maze(const std::string& save_path, const bool& is_solution) const -> void {
     
     std::ofstream file;
-    std::string filename{"maze_" + std::to_string(this->rows) + "x" 
-        + std::to_string(this->cols) + "_" + std::to_string(this->seed) + ".txt"};
+    auto build_filename = [&is_solution, this](){
+        std::string fname{"maze_" + std::to_string(rows) + "x" 
+        + std::to_string(cols) + "_" + std::to_string(seed)};
+        return (is_solution) ? fname + "_solution.txt" : fname + ".txt";
+    };
+    const std::string filename{build_filename()};
     auto maze_file{save_path + "/" + filename};
     file.open(maze_file);
     if (!file.is_open()) {
@@ -246,7 +344,7 @@ auto Maze2D::save_maze(const std::string& save_path) const -> void {
     
     file.close();
     
-    std::cout << "maze saved to: " << maze_file << "\n";
+    std::cout << "\nmaze saved to: " << maze_file << "\n";
     
     return;
 }

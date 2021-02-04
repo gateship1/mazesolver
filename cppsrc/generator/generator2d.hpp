@@ -1,7 +1,7 @@
 #ifndef GENERATOR2D_HEADER_FILE
 #define GENERATOR2D_HEADER_FILE
 
-#include <algorithm> // std::find_if
+#include <algorithm> // std::find_if, std::sort
 #include <cstdlib> // std::rand
 #include <ctime>   // std::time
 #include <iostream>
@@ -9,6 +9,7 @@
 #include <utility> // std::make_pair, std::pair
 #include <vector> // std::vector
 
+#include "compare_pairs.hpp"
 #include "maze2d.hpp"
 
 /* Generator

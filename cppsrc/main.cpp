@@ -2,23 +2,12 @@
 #include <utility>
 
 #include "cmd_input.hpp"
+#include "demo_utils.hpp"
 #include "generator2d.hpp"
-
-auto get_cmd_input() -> std::pair<int, int> {
-    
-    int rows{}, cols{};
-    
-    std::cout << "rows: ";
-    std::cin >> rows;
-    std::cout << "cols: ";
-    std::cin >> cols;
-    
-    return std::make_pair(rows, cols);
-};
-
-auto check_size(const std::pair<int, int>& msize) -> bool {
-    return (msize.first <= 4 || msize.second <= 4) ? false : true;
-}
+#include "maze2d.hpp"
+#include "tokenize.hpp"
+#include "threadstopper.hpp"
+#include "wheeltask.hpp"
 
 auto main(int argc, char **argv) -> int {
     
@@ -31,6 +20,7 @@ auto main(int argc, char **argv) -> int {
         // flag variables
         auto load_maze{false};
         auto load_path{std::string()};
+        auto method{std::string()};
         auto print_maze{false};
         auto save_maze{false};
         auto save_path{std::string()};
@@ -52,49 +42,117 @@ auto main(int argc, char **argv) -> int {
             if (args[i] == "seed") {
                 seed_val = static_cast<unsigned int>(std::stoi(args[i+1]));
             }
+            if (args[i] == "astar" || args[i] == "bfs" || args[i] == "dfs") {
+                method = args[i];
+            }
         }
         
         if (load_maze) {
-            Maze2D maze(Maze2D::load_maze(load_path));
-            if (maze.e.empty()) return -1;
-            if (print_maze) {
-                Maze2D::print_maze(maze.maze_to_str());
-            }
+            
+            // load a maze
+            std::cout << "Loading maze...";
+            
+            WheelTask spinningwheel;
+            std::thread th1([&]() {
+                spinningwheel.run();
+            });
+                        
+            std::thread th2([&]() {
+                                
+                Maze2D maze(Maze2D::load_maze(load_path));
+                if (maze.e.empty()) {
+                    spinningwheel.stop();
+                    th1.join();
+                    th2.join();
+                    return;
+                }
+                
+                if (print_maze) {
+                    Maze2D::print_maze(maze.maze_to_str());
+                }
+                
+                solver(maze, method, print_maze, save_maze);
+                
+                spinningwheel.stop();
+                
+            });
+            
+            th1.join();
+            th2.join();
+            
         } else {
             
-            auto msize{get_cmd_input()};
+            auto msize{get_maze_size_from_cmdline()};
             if (!check_size(msize)) {
                 std::cout << "Invalid maze size\n";
                 return 1;
             }
             
-            Generator2D gen(msize.first, msize.second);
-            Maze2D maze(gen.rbacktrack(seed_val));
+            // generate a maze
+            std::cout << "Generating maze...  ";
             
-            if (save_maze) {
-                maze.save_maze(save_path);
-            }
+            WheelTask spinningwheel;
+            std::thread th1([&]() {
+                spinningwheel.run();
+            });
             
-            if (print_maze) {
-                std::cout << "\nMaze seed = " << maze.seed; 
-                Maze2D::print_maze(maze.maze_to_str());
-            }
+            std::thread th2([&]() {
+                
+                Generator2D gen(msize.first, msize.second);
+                Maze2D maze(gen.rbacktrack(seed_val));
+                
+                if (save_maze) {
+                    std::cout << "\nSaving...  ";
+                    maze.save_maze(save_path);
+                }
+                                
+                // solve the maze
+                solver(maze, method, print_maze, save_maze);                
+                spinningwheel.stop();
+                
+                if (method == std::string() && print_maze) {
+                    std::cout << "\nMaze seed = " << maze.seed;
+                    Maze2D::print_maze(maze.maze_to_str());
+                }
+                
+            });
+            
+            th1.join();
+            th2.join();
+            
         }
     } else {
         
-        auto msize{get_cmd_input()};
+        auto msize{get_maze_size_from_cmdline()};
         if (!check_size(msize)) {
             std::cout << "Invalid maze size\n";
             return 1;
         }
         
-        Generator2D gen(msize.first, msize.second);        
+        std::cout << "Generating maze...  ";
         
-        Maze2D maze(gen.rbacktrack());
-        std::cout << "seed = " << maze.seed << '\n';
-        Maze2D::print_maze(maze.maze_to_str());
-        std::cout << "\n";
+        WheelTask spinningwheel;
+        std::thread th1([&]() {
+            spinningwheel.run();
+        });
         
+        std::thread th2([&]() {
+            
+            Generator2D gen(msize.first, msize.second);
+            
+            Maze2D maze(gen.rbacktrack());
+            
+            std::cout << "\nMaze seed = " << maze.seed << '\n';
+            Maze2D::print_maze(maze.maze_to_str());
+            std::cout << "\n";
+            
+            spinningwheel.stop();
+            
+        });
+        
+        th1.join();
+        th2.join();
+                
     }
       
     return 0;
