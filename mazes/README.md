@@ -34,3 +34,5 @@ maze_10x20_1612147230.txt
 ```
 
 In a maze file ```'#'``` represents a wall ```' '``` represents a path, ```'S'``` represents the maze start (or entrance), ```'E'``` represents the maze end (or exit).
+
+A maze can start, ```'S'```, on either the left wall or the top wall. The maze can end, ```'E'```, on either the bottom wall or the right wall.

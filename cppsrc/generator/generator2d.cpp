@@ -40,6 +40,9 @@ auto Generator2D::rbacktrack(const unsigned int& seed) -> Maze2D {
         visited_vertices_count++; // increment the number of visited vertices
     }
     
+    // sort the edges in the maze path (for use in solving)
+    std::sort(mpath.begin(), mpath.end(), compare_pairs<int>);
+    
     return Maze2D(seed, this->rows, this->cols, this->set_special_vertex("start"), this->set_special_vertex("end"), mpath);
 }
 

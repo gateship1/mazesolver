@@ -1,5 +1,6 @@
 # maze files
 mazes/maze_*
+solutions/maze_*
 
 # build files
 build/*
